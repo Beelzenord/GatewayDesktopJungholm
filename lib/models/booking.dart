@@ -37,8 +37,8 @@ class Booking {
       userId: json['user_id'] as String,
       productId: json['product_id'] as String,
       productName: productName,
-      startTime: DateTime.parse(json['start_time'] as String),
-      endTime: DateTime.parse(json['end_time'] as String),
+      startTime: _parseToSwedishTime(json['start_time'] as String),
+      endTime: _parseToSwedishTime(json['end_time'] as String),
       notes: json['notes'] as String?,
       status: json['status'] as String,
       bookingReference: json['booking_reference'] as String?,
@@ -57,6 +57,23 @@ class Booking {
 
   bool overlapsWith(DateTime start, DateTime end) {
     return startTime.isBefore(end) && endTime.isAfter(start);
+  }
+
+  // Parse UTC timestamp and convert to Swedish time (Europe/Stockholm)
+  // Note: This converts to device local time. If device is set to Swedish timezone,
+  // times will be displayed correctly. For explicit Swedish timezone conversion,
+  // the timezone package would be needed.
+  static DateTime _parseToSwedishTime(String utcString) {
+    // Parse the UTC timestamp from Supabase
+    final utcDateTime = DateTime.parse(utcString);
+    
+    // Convert UTC to local time (will be Swedish time if device timezone is set correctly)
+    if (utcDateTime.isUtc) {
+      return utcDateTime.toLocal();
+    }
+    
+    // If already local time, return as is
+    return utcDateTime;
   }
 }
 

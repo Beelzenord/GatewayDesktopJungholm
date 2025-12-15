@@ -55,9 +55,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
         endDate: endDate,
       );
 
-      // Group bookings by date
+      // Group bookings by date (using Swedish local time)
       final Map<DateTime, List<Booking>> groupedBookings = {};
       for (var booking in bookings) {
+        // Use local time components (already converted from UTC in Booking model)
         final date = DateTime(
           booking.startTime.year,
           booking.startTime.month,
