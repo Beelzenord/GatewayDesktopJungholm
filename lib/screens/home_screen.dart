@@ -2,7 +2,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import '../services/auth_service.dart';
+import '../services/products_service.dart';
 import 'calendar_screen.dart';
+import 'session_activation_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -162,6 +164,25 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 12),
               ElevatedButton.icon(
                 onPressed: () async {
+                  await _showProductSelector(context);
+                },
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('Activate Session'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 16,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: () async {
                   await authService.signOut();
                 },
                 icon: const Icon(Icons.logout),
@@ -181,6 +202,74 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _showProductSelector(BuildContext context) async {
+    final productsService = ProductsService();
+    
+    try {
+      final products = await productsService.getActiveProducts();
+      
+      if (products.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No active lab instruments available'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (context.mounted) {
+        final selectedProduct = await showDialog<Product>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Select Lab Instrument'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: products.length,
+                itemBuilder: (context, index) {
+                  final product = products[index];
+                  return ListTile(
+                    leading: const Icon(Icons.science),
+                    title: Text(product.name),
+                    subtitle: product.description != null
+                        ? Text(product.description!)
+                        : null,
+                    onTap: () => Navigator.pop(context, product),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+
+        if (selectedProduct != null && context.mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => SessionActivationScreen(
+                productId: selectedProduct.id,
+                productName: selectedProduct.name,
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading products: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildInfoRow(
