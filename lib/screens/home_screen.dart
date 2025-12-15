@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 import '../services/auth_service.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -20,6 +22,14 @@ class HomeScreen extends StatelessWidget {
             },
             tooltip: 'Sign Out',
           ),
+          if (Platform.isWindows || Platform.isMacOS || Platform.isLinux)
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () async {
+                await windowManager.close();
+              },
+              tooltip: 'Close App',
+            ),
         ],
       ),
       body: SafeArea(
