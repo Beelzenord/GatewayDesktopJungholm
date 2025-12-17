@@ -217,13 +217,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       _buildInfoRow(
                         context,
-                        'User ID',
-                        user?.id ?? 'N/A',
-                        Icons.verified_user,
-                      ),
-                      const Divider(),
-                      _buildInfoRow(
-                        context,
                         'Email',
                         user?.email ?? 'N/A',
                         Icons.email,
