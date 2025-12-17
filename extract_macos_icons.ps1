@@ -68,3 +68,5 @@ if (Test-Path $icoPath) {
     Write-Host "Error: ICO file not found at $icoPath" -ForegroundColor Red
 }
 
+
+

@@ -38,3 +38,5 @@ magick convert windows/runner/resources/jungholm-logo.ico -resize 1024x1024 maco
 3. Use Preview's resize feature to create all required sizes
 4. Replace files in `macos/Runner/Assets.xcassets/AppIcon.appiconset/`
 
+
+

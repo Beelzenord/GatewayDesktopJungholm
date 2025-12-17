@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'services/auth_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
+import 'widgets/session_timer_footer.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,12 +35,20 @@ void main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'Flutter Gateway App',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -52,6 +61,19 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
+      builder: (context, child) {
+        return Stack(
+          children: [
+            child!,
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SessionTimerFooter(navigatorKey: _navigatorKey),
+            ),
+          ],
+        );
+      },
       home: const AuthWrapper(),
     );
   }

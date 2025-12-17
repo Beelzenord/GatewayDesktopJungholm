@@ -1,13 +1,122 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:intl/intl.dart';
 import '../services/auth_service.dart';
 import '../services/products_service.dart';
+import '../services/bookings_service.dart';
+import '../services/session_service.dart';
+import '../models/booking.dart';
+import '../models/session.dart';
 import 'calendar_screen.dart';
 import 'session_activation_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final BookingsService _bookingsService = BookingsService();
+  final SessionService _sessionService = SessionService();
+  List<Booking> _upcomingBookings = [];
+  Map<String, SessionActivationResult> _activationChecks = {};
+  Session? _activeSession;
+  bool _isLoadingBookings = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUpcomingBookings();
+    _checkActiveSession();
+  }
+
+  Future<void> _loadUpcomingBookings() async {
+    setState(() {
+      _isLoadingBookings = true;
+    });
+
+    try {
+      final now = DateTime.now();
+      final bookings = await _bookingsService.getUserBookings(
+        startDate: now,
+        endDate: now.add(const Duration(days: 7)),
+      );
+
+      // Filter confirmed bookings and sort by start time
+      final upcoming = bookings
+          .where((b) => b.status == 'confirmed')
+          .toList()
+        ..sort((a, b) => a.startTime.compareTo(b.startTime));
+
+      // Check activation status for each booking
+      final checks = <String, SessionActivationResult>{};
+      for (var booking in upcoming) {
+        final result = await _sessionService.checkBookedSession(
+          bookingId: booking.id,
+        );
+        checks[booking.id] = result;
+      }
+
+      setState(() {
+        _upcomingBookings = upcoming.take(5).toList(); // Show next 5
+        _activationChecks = checks;
+        _isLoadingBookings = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingBookings = false;
+      });
+    }
+  }
+
+  Future<void> _checkActiveSession() async {
+    try {
+      final session = await _sessionService.getActiveSession();
+      setState(() {
+        _activeSession = session;
+      });
+    } catch (e) {
+      // Ignore errors
+    }
+  }
+
+  Future<void> _activateBooking(String bookingId) async {
+    setState(() {
+      _isLoadingBookings = true;
+    });
+
+    try {
+      await _sessionService.activateBookedSession(bookingId: bookingId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Session activated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        await _checkActiveSession();
+        await _loadUpcomingBookings();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to activate session: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingBookings = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -130,6 +239,125 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(height: 24),
+
+              // Active Session Card
+              if (_activeSession != null)
+                Card(
+                  color: Colors.green[50],
+                  margin: const EdgeInsets.only(bottom: 24),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Icon(Icons.play_circle_filled, color: Colors.green[700]),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Active Session',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.green[700],
+                                    ),
+                              ),
+                              Text(
+                                'Started: ${DateFormat('HH:mm').format(_activeSession!.startTime)}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+              // Upcoming Bookings Section
+              Text(
+                'Upcoming Bookings',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 16),
+              if (_isLoadingBookings)
+                const Center(child: CircularProgressIndicator())
+              else if (_upcomingBookings.isEmpty)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      'No upcoming bookings',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Colors.grey[600],
+                          ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                )
+              else
+                ..._upcomingBookings.map((booking) {
+                  final activationResult = _activationChecks[booking.id];
+                  final canActivate = activationResult?.canActivate == true &&
+                      _activeSession == null;
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.all(16),
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.blue[100],
+                        child: Icon(Icons.event, color: Colors.blue[700]),
+                      ),
+                      title: Text(
+                        booking.productName ?? 'Lab Instrument',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 4),
+                          Text(
+                            '${DateFormat('EEEE, MMMM d').format(booking.startTime)}',
+                          ),
+                          Text(
+                            '${DateFormat('HH:mm').format(booking.startTime)} - ${DateFormat('HH:mm').format(booking.endTime)}',
+                            style: TextStyle(color: Colors.grey[700]),
+                          ),
+                          if (activationResult != null && !activationResult.canActivate)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                activationResult.reason ?? '',
+                                style: TextStyle(
+                                  color: Colors.orange[700],
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      trailing: canActivate
+                          ? ElevatedButton.icon(
+                              onPressed: () => _activateBooking(booking.id),
+                              icon: const Icon(Icons.play_arrow, size: 18),
+                              label: const Text('Activate'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                              ),
+                            )
+                          : null,
+                    ),
+                  );
+                }),
+
               const SizedBox(height: 24),
 
               // Actions section

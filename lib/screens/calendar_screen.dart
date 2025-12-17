@@ -4,7 +4,10 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
 import 'package:window_manager/window_manager.dart';
 import '../services/bookings_service.dart';
+import '../services/session_service.dart';
+import '../services/auth_service.dart';
 import '../models/booking.dart';
+import '../models/session.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -15,6 +18,7 @@ class CalendarScreen extends StatefulWidget {
 
 class _CalendarScreenState extends State<CalendarScreen> {
   final BookingsService _bookingsService = BookingsService();
+  final SessionService _sessionService = SessionService();
   
   CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _focusedDay = DateTime.now();
@@ -22,11 +26,25 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Map<DateTime, List<Booking>> _bookings = {};
   List<Booking> _selectedBookings = [];
   bool _isLoading = false;
+  Map<String, SessionActivationResult> _activationChecks = {};
+  Session? _activeSession;
 
   @override
   void initState() {
     super.initState();
     _loadBookings();
+    _checkActiveSession();
+  }
+
+  Future<void> _checkActiveSession() async {
+    try {
+      final session = await _sessionService.getActiveSession();
+      setState(() {
+        _activeSession = session;
+      });
+    } catch (e) {
+      // Ignore errors
+    }
   }
 
   Future<void> _loadBookings() async {
@@ -65,6 +83,19 @@ class _CalendarScreenState extends State<CalendarScreen> {
           booking.startTime.day,
         );
         groupedBookings.putIfAbsent(date, () => []).add(booking);
+      }
+
+      // Check activation status for user's bookings only
+      final authService = AuthService();
+      final user = authService.currentUser;
+      if (user != null) {
+        final userBookings = bookings.where((b) => b.userId == user.id).toList();
+        for (var booking in userBookings) {
+          final result = await _sessionService.checkBookedSession(
+            bookingId: booking.id,
+          );
+          _activationChecks[booking.id] = result;
+        }
       }
 
       setState(() {
@@ -228,57 +259,136 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           itemCount: _selectedBookings.length,
                           itemBuilder: (context, index) {
                             final booking = _selectedBookings[index];
+                            final activationResult = _activationChecks[booking.id];
+                            final isUserBooking = _isUserBooking(booking);
+                            final canActivate = isUserBooking &&
+                                activationResult?.canActivate == true &&
+                                _activeSession == null;
+
                             return Card(
                               margin: const EdgeInsets.only(bottom: 12),
-                              child: ListTile(
-                                contentPadding: const EdgeInsets.all(16),
-                                leading: CircleAvatar(
-                                  backgroundColor: _getStatusColor(booking.status),
-                                  child: Icon(
-                                    Icons.science,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                title: Text(
-                                  booking.productName ?? 'Lab Instrument',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                subtitle: Column(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '${DateFormat('HH:mm').format(booking.startTime)} - ${DateFormat('HH:mm').format(booking.endTime)}',
-                                      style: TextStyle(
-                                        color: Colors.grey[700],
-                                      ),
+                                    // Header row with icon, title, and status
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        CircleAvatar(
+                                          backgroundColor: _getStatusColor(booking.status),
+                                          radius: 24,
+                                          child: Icon(
+                                            Icons.science,
+                                            color: Colors.white,
+                                            size: 20,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                booking.productName ?? 'Lab Instrument',
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 16,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                '${DateFormat('HH:mm').format(booking.startTime)} - ${DateFormat('HH:mm').format(booking.endTime)}',
+                                                style: TextStyle(
+                                                  color: Colors.grey[700],
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Chip(
+                                          label: Text(
+                                            booking.status.toUpperCase(),
+                                            style: const TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          backgroundColor: _getStatusColor(booking.status),
+                                          labelStyle: const TextStyle(color: Colors.white),
+                                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        ),
+                                      ],
                                     ),
+                                    // Notes
                                     if (booking.notes != null &&
-                                        booking.notes!.isNotEmpty)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 4),
-                                        child: Text(
-                                          booking.notes!,
-                                          style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 12,
+                                        booking.notes!.isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        booking.notes!,
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                    // Activation status
+                                    if (isUserBooking && activationResult != null) ...[
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            activationResult.canActivate
+                                                ? Icons.check_circle
+                                                : Icons.info_outline,
+                                            size: 16,
+                                            color: activationResult.canActivate
+                                                ? Colors.green[700]
+                                                : Colors.orange[700],
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              activationResult.canActivate
+                                                  ? 'Ready to activate'
+                                                  : (activationResult.reason ?? ''),
+                                              style: TextStyle(
+                                                color: activationResult.canActivate
+                                                    ? Colors.green[700]
+                                                    : Colors.orange[700],
+                                                fontSize: 12,
+                                                fontWeight: activationResult.canActivate
+                                                    ? FontWeight.w500
+                                                    : FontWeight.normal,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                    // Activate button
+                                    if (canActivate) ...[
+                                      const SizedBox(height: 12),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: ElevatedButton.icon(
+                                          onPressed: () => _activateBooking(booking.id),
+                                          icon: const Icon(Icons.play_arrow, size: 18),
+                                          label: const Text('Activate Session'),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.green,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 12,
+                                            ),
                                           ),
                                         ),
                                       ),
+                                    ],
                                   ],
-                                ),
-                                trailing: Chip(
-                                  label: Text(
-                                    booking.status.toUpperCase(),
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  backgroundColor: _getStatusColor(booking.status),
-                                  labelStyle: const TextStyle(color: Colors.white),
                                 ),
                               ),
                             );
@@ -288,6 +398,51 @@ class _CalendarScreenState extends State<CalendarScreen> {
               ],
             ),
     );
+  }
+
+  bool _isUserBooking(Booking booking) {
+    try {
+      final authService = AuthService();
+      final user = authService.currentUser;
+      return user != null && booking.userId == user.id;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> _activateBooking(String bookingId) async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await _sessionService.activateBookedSession(bookingId: bookingId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Session activated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        await _checkActiveSession();
+        await _loadBookings();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to activate session: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   Color _getStatusColor(String status) {
