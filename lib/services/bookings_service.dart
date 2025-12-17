@@ -96,5 +96,36 @@ class BookingsService {
       throw Exception('Failed to fetch user bookings: $e');
     }
   }
+
+  // Fetch a specific booking by ID
+  Future<Booking?> getBookingById(String bookingId) async {
+    try {
+      final response = await _supabase
+          .from('bookings')
+          .select('''
+            id,
+            user_id,
+            product_id,
+            start_time,
+            end_time,
+            notes,
+            status,
+            booking_reference,
+            products!bookings_instrument_id_fkey (
+              name
+            )
+          ''')
+          .eq('id', bookingId)
+          .maybeSingle();
+
+      if (response == null) {
+        return null;
+      }
+
+      return Booking.fromJson(response);
+    } catch (e) {
+      throw Exception('Failed to fetch booking: $e');
+    }
+  }
 }
 

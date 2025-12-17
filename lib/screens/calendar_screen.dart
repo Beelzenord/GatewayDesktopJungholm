@@ -85,16 +85,20 @@ class _CalendarScreenState extends State<CalendarScreen> {
         groupedBookings.putIfAbsent(date, () => []).add(booking);
       }
 
-      // Check activation status for user's bookings only
+      // Check activation status for user's bookings only (skip past bookings)
       final authService = AuthService();
       final user = authService.currentUser;
+      final now = DateTime.now();
       if (user != null) {
         final userBookings = bookings.where((b) => b.userId == user.id).toList();
         for (var booking in userBookings) {
-          final result = await _sessionService.checkBookedSession(
-            bookingId: booking.id,
-          );
-          _activationChecks[booking.id] = result;
+          // Only check activation status for bookings that haven't ended yet
+          if (booking.endTime.isAfter(now)) {
+            final result = await _sessionService.checkBookedSession(
+              bookingId: booking.id,
+            );
+            _activationChecks[booking.id] = result;
+          }
         }
       }
 
@@ -334,8 +338,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                         ),
                                       ),
                                     ],
-                                    // Activation status
-                                    if (isUserBooking && activationResult != null) ...[
+                                    // Activation status (only show for future bookings)
+                                    if (isUserBooking && 
+                                        activationResult != null && 
+                                        booking.endTime.isAfter(DateTime.now())) ...[
                                       const SizedBox(height: 8),
                                       Row(
                                         children: [

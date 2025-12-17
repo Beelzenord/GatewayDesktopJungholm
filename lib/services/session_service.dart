@@ -104,17 +104,17 @@ class SessionService {
         );
       }
 
-      // Get the booking
-      final now = DateTime.now();
-      final bookings = await _bookingsService.getUserBookings(
-        startDate: now.subtract(const Duration(days: 1)),
-        endDate: now.add(const Duration(days: 1)),
-      );
+      // Get the booking by ID directly (works for any date)
+      final booking = await _bookingsService.getBookingById(bookingId);
+      
+      if (booking == null) {
+        return SessionActivationResult(
+          canActivate: false,
+          reason: 'Booking not found',
+        );
+      }
 
-      final booking = bookings.firstWhere(
-        (b) => b.id == bookingId,
-        orElse: () => throw Exception('Booking not found'),
-      );
+      final now = DateTime.now();
 
       // Check if booking belongs to user
       if (booking.userId != user.id) {
@@ -152,10 +152,18 @@ class SessionService {
         }
         // Can activate if booking is in progress
       } else if (timeUntilStart.inMinutes > 30) {
+        // Only show minutes remaining if less than 2 hours away
+        final minutesRemaining = timeUntilStart.inMinutes;
+        final hoursRemaining = timeUntilStart.inHours;
+        final showMinutesRemaining = hoursRemaining < 2;
+        
+        final reason = showMinutesRemaining
+            ? 'You can only activate this session up to 30 minutes before the booking starts ($minutesRemaining minutes remaining)'
+            : 'You can only activate this session up to 30 minutes before the booking starts';
+        
         return SessionActivationResult(
           canActivate: false,
-          reason:
-              'You can only activate this session up to 30 minutes before the booking starts (${timeUntilStart.inMinutes} minutes remaining)',
+          reason: reason,
           booking: booking,
         );
       }
