@@ -377,8 +377,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                     // Activate button
                                     if (canActivate) ...[
                                       const SizedBox(height: 12),
-                                      SizedBox(
-                                        width: double.infinity,
+                                      IntrinsicWidth(
                                         child: ElevatedButton.icon(
                                           onPressed: () => _activateBooking(booking.id),
                                           icon: const Icon(Icons.play_arrow, size: 18),

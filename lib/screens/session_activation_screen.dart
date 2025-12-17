@@ -432,15 +432,21 @@ class _SessionActivationScreenState extends State<SessionActivationScreen> {
                                     ],
                                   ],
                                 ),
-                                trailing: ElevatedButton.icon(
-                                  onPressed: canActivate
-                                      ? () => _activateBookedSession(booking.id)
-                                      : null,
-                                  icon: const Icon(Icons.play_arrow, size: 18),
-                                  label: const Text('Activate'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.green,
-                                    foregroundColor: Colors.white,
+                                trailing: IntrinsicWidth(
+                                  child: ElevatedButton.icon(
+                                    onPressed: canActivate
+                                        ? () => _activateBookedSession(booking.id)
+                                        : null,
+                                    icon: const Icon(Icons.play_arrow, size: 18),
+                                    label: const Text('Activate'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
