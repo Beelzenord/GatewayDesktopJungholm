@@ -2,7 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/session_service.dart';
+import '../services/bookings_service.dart';
 import '../models/session.dart';
+import '../models/booking.dart';
 
 class SessionTimerFooter extends StatefulWidget {
   final GlobalKey<NavigatorState>? navigatorKey;
@@ -15,9 +17,12 @@ class SessionTimerFooter extends StatefulWidget {
 
 class _SessionTimerFooterState extends State<SessionTimerFooter> {
   final SessionService _sessionService = SessionService();
+  final BookingsService _bookingsService = BookingsService();
   Session? _activeSession;
+  Booking? _booking;
   Timer? _timer;
   Duration _elapsedTime = Duration.zero;
+  Duration? _remainingTime;
 
   @override
   void initState() {
@@ -45,12 +50,26 @@ class _SessionTimerFooterState extends State<SessionTimerFooter> {
     try {
       final session = await _sessionService.getActiveSession();
       if (mounted) {
+        Booking? booking;
+        
+        // If session has a bookingId, fetch the booking
+        if (session?.bookingId != null) {
+          try {
+            booking = await _bookingsService.getBookingById(session!.bookingId!);
+          } catch (e) {
+            // If booking fetch fails, continue without booking
+            booking = null;
+          }
+        }
+        
         setState(() {
           _activeSession = session;
+          _booking = booking;
           if (session != null) {
             _updateElapsedTime();
           } else {
             _elapsedTime = Duration.zero;
+            _remainingTime = null;
           }
         });
       }
@@ -59,7 +78,9 @@ class _SessionTimerFooterState extends State<SessionTimerFooter> {
       if (mounted) {
         setState(() {
           _activeSession = null;
+          _booking = null;
           _elapsedTime = Duration.zero;
+          _remainingTime = null;
         });
       }
     }
@@ -68,11 +89,25 @@ class _SessionTimerFooterState extends State<SessionTimerFooter> {
   void _updateElapsedTime() {
     if (_activeSession != null) {
       final now = DateTime.now();
-      final elapsed = now.difference(_activeSession!.startTime);
-      if (mounted) {
-        setState(() {
-          _elapsedTime = elapsed;
-        });
+      
+      // For booked sessions, calculate remaining time
+      if (_activeSession!.bookingId != null && _booking != null) {
+        final remaining = _booking!.endTime.difference(now);
+        if (mounted) {
+          setState(() {
+            _remainingTime = remaining.isNegative ? Duration.zero : remaining;
+            _elapsedTime = now.difference(_activeSession!.startTime);
+          });
+        }
+      } else {
+        // For spontaneous sessions, count up
+        final elapsed = now.difference(_activeSession!.startTime);
+        if (mounted) {
+          setState(() {
+            _elapsedTime = elapsed;
+            _remainingTime = null;
+          });
+        }
       }
     }
   }
@@ -130,7 +165,9 @@ class _SessionTimerFooterState extends State<SessionTimerFooter> {
         // Reset state immediately
         setState(() {
           _activeSession = null;
+          _booking = null;
           _elapsedTime = Duration.zero;
+          _remainingTime = null;
         });
         
         // Show success message - use overlay context or find ScaffoldMessenger
@@ -216,7 +253,9 @@ class _SessionTimerFooterState extends State<SessionTimerFooter> {
                     ),
                   ),
                   Text(
-                    'Started: ${DateFormat('HH:mm').format(_activeSession!.startTime)} • Duration: ${_formatDuration(_elapsedTime)}',
+                    _activeSession!.bookingId != null && _remainingTime != null
+                        ? 'Started: ${DateFormat('HH:mm').format(_activeSession!.startTime)} • Remaining: ${_formatDuration(_remainingTime!)}'
+                        : 'Started: ${DateFormat('HH:mm').format(_activeSession!.startTime)} • Duration: ${_formatDuration(_elapsedTime)}',
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.9),
                       fontSize: 12,
