@@ -25,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, SessionActivationResult> _activationChecks = {};
   Session? _activeSession;
   bool _isLoadingBookings = false;
+  Booking? _bookableBooking; // Booking within 30 minutes that can be activated
 
   @override
   void initState() {
@@ -53,16 +54,28 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // Check activation status for each booking
       final checks = <String, SessionActivationResult>{};
+      Booking? bookableBooking;
+      
       for (var booking in upcoming) {
         final result = await _sessionService.checkBookedSession(
           bookingId: booking.id,
         );
         checks[booking.id] = result;
+        
+        // Find the first booking within 30 minutes that can be activated
+        if (bookableBooking == null && result.canActivate) {
+          final timeUntilStart = booking.startTime.difference(now);
+          // Can activate if booking has started or is within 30 minutes
+          if (timeUntilStart.isNegative || timeUntilStart.inMinutes <= 30) {
+            bookableBooking = booking;
+          }
+        }
       }
 
       setState(() {
         _upcomingBookings = upcoming.take(5).toList(); // Show next 5
         _activationChecks = checks;
+        _bookableBooking = bookableBooking;
         _isLoadingBookings = false;
       });
     } catch (e) {
@@ -303,24 +316,46 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  await _showProductSelector(context);
-                },
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('Activate Session'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 16,
+              // Show booking activation button if there's a bookable booking within 30 minutes
+              if (_bookableBooking != null && _activeSession == null)
+                ElevatedButton.icon(
+                  onPressed: () => _activateBooking(_bookableBooking!.id),
+                  icon: const Icon(Icons.play_arrow),
+                  label: Text(
+                    'Activate ${_bookableBooking!.productName ?? 'Booking'}',
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
                   ),
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
+                )
+              // Show spontaneous session button only if no bookable booking and no active session
+              else if (_bookableBooking == null && _activeSession == null)
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await _showProductSelector(context);
+                  },
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Activate Session'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
                 ),
-              ),
               const SizedBox(height: 12),
               ElevatedButton.icon(
                 onPressed: () async {

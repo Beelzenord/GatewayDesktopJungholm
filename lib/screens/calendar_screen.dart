@@ -153,7 +153,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Lab Instrument Bookings'),
+        title: const Text('Jungholms Instruments'),
         actions: [
           // View toggle buttons
           ToggleButtons(
